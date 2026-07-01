@@ -1,0 +1,47 @@
+name: release-linux-arm64
+on:
+  push:
+    tags:
+      - '*-arm64*'
+  workflow_dispatch:
+
+env:
+  APPLICATION_NAME: realesrgan-ncnn-vulkan
+
+jobs:
+  linux-arm64:
+    runs-on: ubuntu-24.04-arm
+    env:
+      VERSION: ${{ github.ref_name }}
+      PACKAGENAME: realesrgan-ncnn-vulkan-${{ github.ref_name }}-linux-aarch64
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: 'recursive'
+    - name: install-build-deps
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends \
+          build-essential \
+          cmake \
+          ninja-build \
+          libvulkan-dev \
+          glslang-tools \
+          zip
+    - name: build
+      run: |
+        cmake -S src -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+        cmake --build build -j 2
+    - name: package
+      run: |
+        mkdir -p "$PACKAGENAME"
+        cp README.md LICENSE "$PACKAGENAME"
+        cp "build/${APPLICATION_NAME}" "$PACKAGENAME"
+        strip -g "$PACKAGENAME/${APPLICATION_NAME}" || true
+        zip -9 -r "${PACKAGENAME}.zip" "$PACKAGENAME"
+    - name: publish-release
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        gh release view "$VERSION" >/dev/null 2>&1 || gh release create "$VERSION" --title "Release $VERSION" --notes "Forked release with Linux arm64 asset."
+        gh release upload "$VERSION" "${PACKAGENAME}.zip" --clobber
