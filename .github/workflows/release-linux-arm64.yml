@@ -5,6 +5,9 @@ on:
       - '*-arm64*'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 env:
   APPLICATION_NAME: realesrgan-ncnn-vulkan
 
