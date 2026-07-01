@@ -69,6 +69,41 @@ jobs:
         name: ${{ env.PACKAGENAME }}
         path: ${{ env.PACKAGENAME }}.zip
 
+  linux-arm64:
+    needs: [setup]
+    runs-on: ubuntu-24.04-arm
+    env:
+      PACKAGENAME: ${{ needs.setup.outputs.APPNAME }}-${{ needs.setup.outputs.VERSION }}-linux-aarch64
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: 'recursive'
+    - name: install-build-deps
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends \
+          build-essential \
+          cmake \
+          ninja-build \
+          libvulkan-dev \
+          glslang-tools
+    - name: build
+      run: |
+        cmake -S src -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+        cmake --build build -j 2
+    - name: package
+      run: |
+        mkdir -p ${{ env.PACKAGENAME }}
+        cp README.md LICENSE ${{ env.PACKAGENAME }}
+        cp build/${{ needs.setup.outputs.APPNAME }} ${{ env.PACKAGENAME }}
+        strip -g ${{ env.PACKAGENAME }}/${{ needs.setup.outputs.APPNAME }} || true
+        zip -9 -r ${{ env.PACKAGENAME }}.zip ${{ env.PACKAGENAME }}
+    - name: upload
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ env.PACKAGENAME }}
+        path: ${{ env.PACKAGENAME }}.zip
+
   openmp-macos:
     runs-on: macos-latest
     steps:
@@ -237,7 +272,7 @@ jobs:
         path: ${{ env.PACKAGENAME }}.zip
 
   release:
-    needs: [setup, ubuntu, macos, windows]
+    needs: [setup, ubuntu, linux-arm64, macos, windows]
     runs-on: ubuntu-latest
     steps:
     - name: download
@@ -283,6 +318,17 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         PACKAGENAME: ${{ needs.setup.outputs.APPNAME }}-${{ needs.setup.outputs.VERSION }}-windows
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: artifacts/${{ env.PACKAGENAME }}/${{ env.PACKAGENAME }}.zip
+        asset_name: ${{ env.PACKAGENAME }}.zip
+        asset_content_type: application/zip
+
+    - name: upload-linux-arm64
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        PACKAGENAME: ${{ needs.setup.outputs.APPNAME }}-${{ needs.setup.outputs.VERSION }}-linux-aarch64
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: artifacts/${{ env.PACKAGENAME }}/${{ env.PACKAGENAME }}.zip
